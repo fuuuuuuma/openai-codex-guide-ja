@@ -25,12 +25,13 @@
 6. 料金とプラン — どう使い始めるか
 7. 使い方【超初心者基準】— 悩み別「こう頼むだけ」
 8. もう一歩進んだ使い方（開発者向け・軽め）
-9. つまずきポイントと注意
-10. まとめ
-11. 用語ミニ辞典（迷ったらここ）
-12. よくある質問（FAQ）
-13. 出典
-14. 未確認・注意事項
+9. 裏技・9割が知らない使い方・10倍賢く使うコツ
+10. つまずきポイントと注意
+11. まとめ
+12. 用語ミニ辞典（迷ったらここ）
+13. よくある質問（FAQ）
+14. 出典
+15. 未確認・注意事項
 
 ---
 
@@ -351,7 +352,137 @@ codex exec resume --output-schema <スキーマ>
 
 ---
 
-## 9. つまずきポイントと注意
+## 9. 裏技・9割が知らない使い方・10倍賢く使うコツ
+
+ここが「撮影の山場」になるパート。**Codex を“ただのコード生成”で終わらせず、エージェントとして使いこなす**ための勘どころを、公式ドキュメントと X（実ユーザーの運用知見）を出典にまとめます。
+
+> 📌 **断り**: 本セクションの見出しは分かりやすさ重視で「裏技/9割が知らない/10倍」という言葉を使っていますが、**中身は出典の取れた事実のみ**です。効果を保証する表現（必ず速くなる等）は使いません。数字での効果は単一ユーザーの体感が多く、ここでは**質的にだけ**紹介します。
+
+### 🃏 裏技編 — 玄人がやっている“設定”
+
+**① AGENTS.md を置く（これが最大のレバー）**
+
+`AGENTS.md` は、**Codex が作業を始める前に必ず読む「プロジェクトの取扱説明書」**。リポジトリのルートに置いた Markdown ファイルです。公式は **「Codex は作業前に `AGENTS.md` を読む」** と明記しています（出典: 公式 AGENTS.md ガイド）。
+
+何を書くかは公式が推奨を示しています（出典: 公式 best-practices）:
+
+- リポジトリの構成・重要ディレクトリ
+- ビルド/テストの実行コマンド
+- エンジニアリング規約・PR の期待値
+- 禁止パターン・制約
+- 「完了」と見なす検証方法
+
+公式の刺さる一言: **「短く正確な `AGENTS.md` は、曖昧なルールを並べた長いファイルより役に立つ」**（出典: 公式 best-practices、原文の和訳）。
+
+置き場所と優先順位（出典: 公式 AGENTS.md ガイド）:
+
+- **グローバル**: `~/.codex/`（全プロジェクト共通。`AGENTS.override.md` → `AGENTS.md` の順で読む）
+- **プロジェクト**: Git ルートから現在のフォルダへ向かって各階層を読み、**現在地に近いファイルほど優先**（後から連結されるため上書きになる）
+- 合計サイズの上限は `project_doc_max_bytes`（既定 **32KiB**）。`~/.codex/config.toml` で調整可
+
+> ⚠️ 重要な誤解ポイント: **`AGENTS.md` に書いたコマンドを Codex が勝手に実行するわけではありません**。あくまで「判断・計画のための指示」として効きます（出典: 公式 AGENTS.md ガイド）。
+
+X でも AGENTS.md は最頻出トピックです。実ユーザーの知見:
+- 自分の声・好み・「やること/やらないこと（Dos & Don'ts）」を明記する（[@thesherlocker](https://x.com/thesherlocker/status/2059472529350402162)）
+- 繰り返し起きる問題パターンをルール化して、エージェントの混乱を減らす（[@danielchae79](https://x.com/danielchae79/status/2060207303325098410)）
+- ミニマリストな AGENTS.md をテンプレとしてコピーして自律化の起点にする（[@Av1dlive](https://x.com/Av1dlive/status/2058588647088406931)）
+- 詳細ルールは別ファイルに分け、Global と Project で同期してトークンを節約しつつ一貫性を保つ（[@u1](https://x.com/u1/status/2060713915458425113)）
+
+**② worktree で“並列作業”する**
+
+Git の worktree は、**同じリポジトリを別フォルダに切り出した独立の作業場**。Codex アプリは worktree をサポートし、**並行する変更を隔離**できます（出典: 公式 app）。公式 best-practices も **「git worktree なしでライブのスレッドを走らせるのは避ける」**を“避けるべき失敗”に挙げています（出典: 公式 best-practices）。つまり「複数タスクを同時に回すなら worktree で分ける」がプロの基本。
+
+**③ スレッドは“プロジェクト単位”ではなく“タスク単位”で分ける**
+
+公式 best-practices が挙げる典型的な失敗の一つが **「1プロジェクト1スレッドにしてしまう（タスクごとに分けない）」**こと（出典: 公式 best-practices）。作業（タスク）ごとにスレッドを立てると、文脈が混ざらず精度が上がります。
+
+**④ 別エージェントにレビューさせる（`/review`）**
+
+Codex には **「コミット前に、別の Codex エージェントにコードレビューさせる」**機能があります。CLI/IDE の `/review` で、ベースブランチや未コミット変更に対して構造化レビューを実行できます（出典: 公式 CLI / best-practices）。
+
+**⑤ 複数モデルで相互レビュー（コミュニティの裏技）**
+
+X では **Codex と Claude Code を相互にレビューさせる**「マルチエージェント／敵対的QA」で、計画と実装の品質を上げる運用が共有されています（[@AlexFinn](https://x.com/AlexFinn/status/2012653446349131953)、コミュニティ手法）。河村さんの環境（Codex × Claude Code 併用）と相性が良い使い方です。
+
+### 🙈 9割が知らない使い方編 — “機能の存在”自体
+
+**⑥ Plan Mode（計画モード）**
+
+Plan Mode を ON にすると、Codex は **ブレストし、不明点を質問し、進め方を提示するだけで、ファイルもコマンドも一切触りません**。`/plan` または **Shift+Tab** で切り替えます（出典: 公式 best-practices）。公式の推奨ワークフローは **「重要な作業は Plan Mode で始め → 質問に答え → 計画が合うまで詰め → Plan Mode を切って実行」**（出典: 公式 prompting）。
+
+X でも「計画作成 → 人間がレビュー → 承認してから実行」を必須化する運用が定番です（[@vijucat](https://x.com/vijucat/status/2059130133097889826)、[@heavenOSK](https://x.com/heavenOSK/status/2048295122543280293)）。
+
+**⑦ Skills（再利用できる手順書）**
+
+Skill は **「やり方を一度書けば、以後のセッションが自動で受け継ぐ」再利用ワークフロー**。`SKILL.md` という Markdown に手順を書き、置き場所で適用範囲が決まります（出典: 公式 skills）:
+
+- **ユーザー共通**: `~/.agents/skills/`
+- **リポジトリ単位**: `.agents/skills`（カレント）/ `$REPO_ROOT/.agents/skills`
+- 呼び出しは `/skills` または `$` メンション。タスク内容にマッチすれば**自動で選ばれる**（progressive disclosure：初期リストは文脈の約2%／約8,000文字に制限）
+
+X の運用知見: **Skill は欲張らず 4〜5個に絞り、エージェント自身にメンテさせる**と効率的（[@jturntdev](https://x.com/jturntdev/status/2059662730618171426)）。定義のコツ（明確な名前・呼び出し形式・使用条件）も共有されています（[@donvito](https://x.com/donvito/status/2005079045315449043)）。
+
+**⑧ 画像を“渡す/作る”**
+
+CLI でも **スクリーンショットやデザイン指定を添付して、プロンプトと一緒に読ませられます**。さらに **画像の生成・編集を CLI/IDE 内で直接**できます（出典: 公式 CLI）。「このエラー画面なんとかして」とスクショを渡す使い方は、9割が見落としがち。
+
+**⑨ MCP / プラグインで“外部ツール”とつなぐ**
+
+MCP（Model Context Protocol）で、Codex に **Figma・Linear・Jira・GitHub・社内Wiki** などの外部ツールへのアクセスを与えられます（出典: 公式 CLI、Web）。プラグイン経由で「アプリ・Skill・MCPサーバー」をまとめて接続できます（出典: 公式 app）。
+
+> 💡 X 由来の運用原則: **MCP は“賢さ”ではなく“アクセスできる世界”を広げる**もの。常に文脈を消費するので、常時必要でない情報は MCP より Skill 側に寄せると軽い（コミュニティ知見）。
+
+**⑩ 定期実行（Automations）とスクリプト化（`codex exec`）**
+
+アプリの **Automations** は、**繰り返しタスクのスケジュール実行や、同じスレッドを定期的に起こして点検**できます（出典: 公式 app）。CLI の `codex exec` を使えば、**繰り返しのワークフローをスクリプト化**できます（出典: 公式 CLI）。
+
+**⑪ subagents で並列化**
+
+複雑なタスクは **subagents で分担・並列化**できます（出典: 公式 CLI）。大きな作業を分割して同時に進めたいときの土台です。
+
+### 🚀 10倍賢く使うコツ編 — “頼み方”と“運用”
+
+**⑫ 最初のプロンプトは「4点セット」で書く**
+
+公式 best-practices が挙げる、出力品質を最も左右する最初の一手。次の4つを入れるだけで結果が変わります（出典: 公式 best-practices、各項目は原文の和訳）:
+
+| 要素 | 何を書くか |
+|---|---|
+| **Goal（目的）** | 何を変えたい/作りたいのか |
+| **Context（文脈）** | 関係するファイル・フォルダ・ドキュメント・例・エラー |
+| **Constraints（制約）** | 守るべき規約・設計・安全要件・慣習 |
+| **Done when（完了条件）** | 何が真なら完了か（テストが通る／挙動が変わる／バグが再現しなくなる 等） |
+
+**⑬ 推論レベル（reasoning effort）を使い分ける**
+
+タスクの重さで思考の深さを変えます（出典: 公式 best-practices / IDE）:
+
+- **Low**: 速い・スコープが明確な作業
+- **Medium / High**: 複雑な変更やデバッグ
+- **Extra High**: 長くてエージェント的な、思考量の多い作業
+
+「軽い修正に High を使って遅い」「重いデバッグに Low で浅い」を避けるだけで体感が変わります。
+
+**⑭ 同じミスを2回したら、AGENTS.md を直す**
+
+公式 best-practices の金言: **「Codex が同じミスを2回したら、振り返り（retrospective）を求めて `AGENTS.md` を更新する」**（出典: 公式 best-practices、原文の和訳）。AGENTS.md を“育てる living document”として運用するのが、長期で効く最大のコツ。
+
+**⑮ いきなり実装させず「先に計画を聞く」**
+
+複雑な作業ほど、Plan mode を使うか、**「先に計画を提案して」「逆に質問して（interview）」**と頼んでから着手させると、手戻りが減ります（出典: 公式 best-practices / prompting）。
+
+**⑯ Codex に“検証まで”やらせる**
+
+公式は **「必要ならテストを作り、関連チェックを実行し、結果を確認し、受け入れる前にレビューさせる」**一連のループを推奨（出典: 公式 best-practices）。「作って終わり」ではなく「テストが通る状態まで」を一度に頼むと品質が上がります。
+
+> 🎬 **撮影用・3行まとめ**:
+> 1. まず `AGENTS.md` を1枚置く（短く正確に）＝ これだけで賢くなる
+> 2. 重い作業は **Plan Mode** で計画→承認→実行、軽さ/重さで **推論レベル**を切替
+> 3. **同じミス2回で AGENTS.md を更新**・**タスク単位でスレッド**・**worktreeで並列** = 玄人運用
+
+---
+
+## 10. つまずきポイントと注意
 
 - **「動きます」を鵜呑みにしない**: Codex は実際にファイルを書き換えます。作業前の Git コミットを習慣に。
 - **API キー認証の制限**: 一部機能（クラウドスレッド等）が使えない場合あり。フル機能なら ChatGPT アカウントでサインイン。
@@ -361,7 +492,7 @@ codex exec resume --output-schema <スキーマ>
 
 ---
 
-## 10. まとめ
+## 11. まとめ
 
 2026年5月の Codex は、**「コードを書くAI」から「PC作業まで肩代わりするエージェント」への移行**が一段進んだ月でした。
 
@@ -374,7 +505,7 @@ codex exec resume --output-schema <スキーマ>
 
 ---
 
-## 11. 用語ミニ辞典（迷ったらここ）
+## 12. 用語ミニ辞典（迷ったらここ）
 
 本文に出てきた言葉を、**できるだけ普通の言葉**で言い換えます。意味があやふやな単語があれば、ここに戻ってきてください。
 
@@ -402,7 +533,7 @@ codex exec resume --output-schema <スキーマ>
 
 ---
 
-## 12. よくある質問（FAQ）
+## 13. よくある質問（FAQ）
 
 **Q. プログラミングが分からなくても使えますか？**
 A. 「読む・調べる・小さく試す」用途なら、普通の日本語で頼めます（例:「このプロジェクトが何をするものか説明して」）。ただし Codex は実際にファイルを変更できるので、**作業前の保存（Git コミット）**と**結果の自分での確認**は必要です。
@@ -430,11 +561,11 @@ A. 機能と日付は **公式 changelog**（`developers.openai.com/codex/change
 
 ---
 
-## 13. 出典
+## 14. 出典
 
 | 主張・トピック | 出典URL | 確度 |
 |---|---|---|
-| Codex とは / 入り口5種 / 認証 / インストールコマンド / 使用例 | https://developers.openai.com/codex/quickstart | 公式 |
+| Codex とは / 入り口4種 / 認証 / インストールコマンド / 使用例 / 全プランに含まれる | https://developers.openai.com/codex/quickstart | 公式 |
 | 26.527: Windows Computer Use・遠隔操作・トークン使用状況表示・スレッド管理 | https://developers.openai.com/codex/changelog#codex-2026-05-28-app | 公式 |
 | CLI 0.135.0: codex doctor / Vim / 権限プロファイル / 非対話インストール | https://developers.openai.com/codex/changelog | 公式 |
 | 26.519: Appshots / ゴールモード正式化 / ブラウザ操作 / Chrome拡張 | https://developers.openai.com/codex/changelog | 公式 |
@@ -442,12 +573,28 @@ A. 機能と日付は **公式 changelog**（`developers.openai.com/codex/change
 | CLI 0.132.0: Python SDK 認証 / `--output-schema` 構造化出力 | https://developers.openai.com/codex/changelog | 公式 |
 | CLI 0.131.0: @メンション統合 / トークン使用量表示 / openai-codex 移行 | https://developers.openai.com/codex/changelog | 公式 |
 | Codex 101（オンボーディング教材の存在） | https://academy.openai.com/public/clubs/builders-etkn1/resources/codex-101-introduction-and-onboarding-2026-03-18 | 公式（本文は動画/PDFで未取得） |
+| §9 裏技/コツ: プロンプト4点セット・推論レベル・worktree・タスク単位スレッド・同じミス2回でAGENTS.md更新・検証ループ | https://developers.openai.com/codex/learn/best-practices | 公式 |
+| §9: AGENTS.md の役割・置き場所と優先順位・32KiB上限・コマンドは自動実行されない | https://developers.openai.com/codex/guides/agents-md | 公式 |
+| §9: Skills（SKILL.md・`~/.agents/skills/`・`/skills`・`$`メンション） | https://developers.openai.com/codex/skills | 公式 |
+| §9: Plan Mode（`/plan`・Shift+Tab）・先に計画/interview | https://developers.openai.com/codex/guides/prompting | 公式 |
+| §9: `/review`・画像入力/生成・MCP・subagents・モデル選択 | https://developers.openai.com/codex/cli | 公式 |
+| §9: Automations・worktree・Computer Use・Skills/プラグイン | https://developers.openai.com/codex/app | 公式 |
+| §9: 推論レベル low/medium/high・承認モード・キーボードショートカット | https://developers.openai.com/codex/ide | 公式 |
+| §9 X(実ユーザー知見): AGENTS.md に Dos&Don'ts | https://x.com/thesherlocker/status/2059472529350402162 | 二次（X・hermes-x取得） |
+| §9 X: 問題パターンをルール化 | https://x.com/danielchae79/status/2060207303325098410 | 二次（X・hermes-x取得） |
+| §9 X: ミニマリストAGENTS.mdをテンプレ化 | https://x.com/Av1dlive/status/2058588647088406931 | 二次（X・hermes-x取得） |
+| §9 X: 詳細ルールを別ファイル化しGlobal/Project同期 | https://x.com/u1/status/2060713915458425113 | 二次（X・hermes-x取得） |
+| §9 X: Plan→人間レビュー→承認→実行 | https://x.com/vijucat/status/2059130133097889826 | 二次（X・hermes-x取得） |
+| §9 X: reactiveで発見→成熟後Plan Mode | https://x.com/heavenOSK/status/2048295122543280293 | 二次（X・hermes-x取得） |
+| §9 X: Skillは4〜5個に絞り自動メンテ | https://x.com/jturntdev/status/2059662730618171426 | 二次（X・hermes-x取得） |
+| §9 X: Skill定義のコツ（名前/呼び出し/使用条件） | https://x.com/donvito/status/2005079045315449043 | 二次（X・hermes-x取得） |
+| §9 X: Codex×Claude Codeの相互レビュー(マルチエージェントQA) | https://x.com/AlexFinn/status/2012653446349131953 | 二次（X・hermes-x取得） |
 | 各機能の告知（Windows操作・遠隔・社内MCP 等） | https://x.com/OpenAI / https://x.com/OpenAIDevs / https://x.com/Codex_Changelog の各投稿 | 二次（本文未取得・402のため公式changelogで裏取り） |
 | 日本語の解説・反応 | https://x.com/itnavi2022/status/2060447021342093512 | 二次（本文未取得） |
 
 ---
 
-## 14. 未確認・注意事項
+## 15. 未確認・注意事項
 
 - **アプリ 26.527 の日付**: 公式 changelog の表示日付は **2026年5月29日**（本資料もこれを採用）。ただし、その項目のパーマリンク用アンカーは `codex-2026-05-28-app`（5月28日）で、表示日付とアンカーで1日ずれがあります。バージョン番号 26.527 と機能内容は公式 changelog で確認済み。なお CLI 0.135.0 の表示日付は 5月28日です。
 - **料金の金額・モデル名**: 「すべての ChatGPT プランに Codex が含まれる」は公式 quickstart で確認済み。一方、各プランの**具体的な金額・利用上限は二次情報**（変動するため公式の料金ページで要確認）、**Codex が使うモデルの正式名称は出典でばらつくため未確認**。
@@ -455,6 +602,8 @@ A. 機能と日付は **公式 changelog**（`developers.openai.com/codex/change
 - **バックグラウンドエージェントのアイコン統一などUI細部**: X告知ベースで一次本文未取得のため **未確認**。
 - **X投稿8件の本文**: いずれも取得時に HTTP 402（ペイウォール）で本文を取得できず。記載した事実は、各投稿が告知した内容を **公式 changelog で裏取りできた範囲**に限定しています。X独自の細部は本文に含めていません。
 - **Codex 101 教材の中身**: ページ上はランディング構成のみ取得でき、本編（動画/PDF）は未取得。
+- **§9 の X 由来の知見**: `hermes-x` で取得した実ユーザー投稿（要約は取得できたが投稿全文の逐語は未保存）。**効果の数値（「○%高速化」等）は単一ユーザーの体感**のため本文では数値断定せず、手法の存在・考え方のみ紹介。手法の妥当性は公式 best-practices / AGENTS.md ガイドと整合する範囲に限定。
+- **§9 の細部（パス・既定値）**: `~/.agents/skills/`・`project_doc_max_bytes`（既定32KiB）・`/plan`／Shift+Tab 等は公式ドキュメント記載。ただし**バージョンや環境で変わりうる**ため、導入時は各公式ページで最新を確認。
 
 ### 注記
 
